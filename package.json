@@ -9,13 +9,15 @@
     "lint": "next lint",
     "prepare": "husky",
     "test": "echo \"No tests yet\" && exit 0",
-    "prettier": "prettier --write ."
+    "prettier": "prettier --write . --log-level=silent",
+    "format": "pretty-quick --staged"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
     "@mui/material": "^7.0.1",
     "@mui/material-nextjs": "^7.0.0",
     "next": "15.2.4",
+    "next-intl": "^4.0.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -29,6 +31,7 @@
     "eslint-config-next": "15.2.4",
     "husky": "^9.1.7",
     "prettier": "^3.5.3",
+    "pretty-quick": "^4.1.1",
     "typescript": "^5"
   }
 }

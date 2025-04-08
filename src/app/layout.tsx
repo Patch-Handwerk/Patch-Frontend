@@ -1,5 +1,6 @@
 import { ThemeProvider } from '@mui/material';
 import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
+import { getLocale } from 'next-intl/server';
 import { Lato, Montserrat } from 'next/font/google';
 
 import theme from '@/theme';
@@ -17,13 +18,15 @@ const montserratBase = Montserrat({
   subsets: ['latin']
 });
 
-export default function RootLayout({
+export default async function RootLayout({
   children
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body className={`${latoBase.variable} ${montserratBase.variable}`}>
         <AppRouterCacheProvider>
           <ThemeProvider theme={theme}>{children}</ThemeProvider>

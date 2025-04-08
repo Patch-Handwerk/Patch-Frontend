@@ -8,7 +8,7 @@ export default function Home() {
       <main>
         <h1>{t('title')}</h1>
       </main>
-      <footer></footer>
+      <footer>Footer</footer>
     </div>
   );
 }

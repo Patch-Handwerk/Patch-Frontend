@@ -1,0 +1,71 @@
+name: Deploy Branch Environments
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - master
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    name: Build and Deploy Branch
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Extract branch name
+        shell: bash
+        run: echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> $GITHUB_ENV
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js app
+        run: npm run build
+
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Create a new slot if it doesn't exist
+      - name: Create deployment slot if needed
+        run: |
+          az webapp deployment slot create \
+            --name patch-nextjs-app \
+            --resource-group nextjs-app-rg \
+            --slot ${{ env.BRANCH_NAME }} \
+            --configuration-source patch-nextjs-app
+        continue-on-error: true
+
+      # Deploy to the branch-specific slot
+      - name: Deploy to slot
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'patch-nextjs-app'
+          slot-name: ${{ env.BRANCH_NAME }}
+          package: .
+          startup-command: 'npm start'
+
+      # Set up custom hostname for the slot
+      - name: Configure custom hostname
+        run: |
+          HOSTNAME="${{ env.BRANCH_NAME }}.staging.mydomain.com"
+
+          # Check if hostname binding exists
+          BINDING=$(az webapp config hostname list --webapp-name patch-nextjs-app --slot ${{ env.BRANCH_NAME }} --resource-group nextjs-app-rg --query "[?name=='$HOSTNAME'].name" -o tsv)
+
+          if [ -z "$BINDING" ]; then
+            # Add hostname binding
+            az webapp config hostname add --webapp-name patch-nextjs-app --slot ${{ env.BRANCH_NAME }} --resource-group nextjs-app-rg --hostname $HOSTNAME
+          fi
+
+      - name: Log out from Azure
+        run: az logout
+        if: always()

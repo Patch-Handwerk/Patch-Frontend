@@ -10,16 +10,16 @@ import './globals.css';
 const latoBase = Lato({
   variable: '--font-lato',
   subsets: ['latin'],
-  weight: ['300', '400', '700']
+  weight: ['300', '400', '700'],
 });
 
 const montserratBase = Montserrat({
   variable: '--font-montserrat',
-  subsets: ['latin']
+  subsets: ['latin'],
 });
 
 export default async function RootLayout({
-  children
+  children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {

@@ -1,7 +1,12 @@
-name: Deploy Branch Environments
+name: Deploy Branch as Separate App
 
 on:
   push:
+    branches:
+      - dev
+      - 'feature/**'
+      - 'bugfix/**'
+      - 'hotfix/**'
     branches-ignore:
       - main
       - master
@@ -34,58 +39,52 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Configure Node.js version
-      - name: Configure Node.js version
+      # Create a new App Service for this branch if it doesn't exist
+      - name: Create or Update App Service for branch
         run: |
-          az webapp config appsettings set --name patch-main-app --resource-group patch-nextjs-app --settings WEBSITE_NODE_DEFAULT_VERSION=~22
+          # Generate a safe app name (lowercase alphanumeric)
+          SAFE_BRANCH=$(echo ${{ env.BRANCH_NAME }} | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g')
+          BRANCH_APP_NAME="patch-$SAFE_BRANCH-app"
 
-      # Create a new slot if it doesn't exist
-      - name: Create deployment slot if needed
-        run: |
-          # Check if slot exists
-          SLOT_EXISTS=$(az webapp deployment slot list --name patch-main-app --resource-group patch-nextjs-app --query "[?name=='${{ env.BRANCH_NAME }}']" -o tsv)
+          # Check if app exists
+          APP_EXISTS=$(az webapp list --query "[?name=='$BRANCH_APP_NAME']" -o tsv)
 
-          if [ -z "$SLOT_EXISTS" ]; then
-            echo "Creating new deployment slot ${{ env.BRANCH_NAME }}..."
-            az webapp deployment slot create \
-              --name patch-main-app \
-              --resource-group patch-nextjs-app \
-              --slot ${{ env.BRANCH_NAME }} \
-              --configuration-source patch-main-app
+          if [ -z "$APP_EXISTS" ]; then
+            echo "Creating new App Service $BRANCH_APP_NAME..."
             
-            # Configure Node.js version for the new slot
-            az webapp config appsettings set \
-              --name patch-main-app \
+            # Create App Service
+            az webapp create \
+              --name $BRANCH_APP_NAME \
               --resource-group patch-nextjs-app \
-              --slot ${{ env.BRANCH_NAME }} \
-              --settings WEBSITE_NODE_DEFAULT_VERSION=~22
-            
-            echo "Deployment slot created and configured."
+              --plan patch-app-service-plan \
+              --runtime "NODE:22-lts"
           else
-            echo "Deployment slot ${{ env.BRANCH_NAME }} already exists."
+            echo "App Service $BRANCH_APP_NAME already exists."
           fi
 
-      # Deploy to the branch-specific slot
-      - name: Deploy to slot
+          # Store app name for next steps
+          echo "BRANCH_APP_NAME=$BRANCH_APP_NAME" >> $GITHUB_ENV
+
+      # Deploy to the branch-specific App Service
+      - name: Deploy to branch App Service
         uses: azure/webapps-deploy@v2
         with:
-          app-name: 'patch-main-app'
+          app-name: ${{ env.BRANCH_APP_NAME }}
           resource-group-name: 'patch-nextjs-app'
-          slot-name: ${{ env.BRANCH_NAME }}
           package: .
           startup-command: 'npm start'
 
-      # Set up custom hostname for the slot
+      # Set up custom hostname for the branch app service
       - name: Configure custom hostname
         run: |
           HOSTNAME="${{ env.BRANCH_NAME }}.staging.mydomain.com"
 
           # Check if hostname binding exists
-          BINDING=$(az webapp config hostname list --webapp-name patch-main-app --slot ${{ env.BRANCH_NAME }} --resource-group patch-nextjs-app --query "[?name=='$HOSTNAME'].name" -o tsv)
+          BINDING=$(az webapp config hostname list --webapp-name ${{ env.BRANCH_APP_NAME }} --resource-group patch-nextjs-app --query "[?name=='$HOSTNAME'].name" -o tsv)
 
           if [ -z "$BINDING" ]; then
-            # Add hostname binding
-            az webapp config hostname add --webapp-name patch-main-app --slot ${{ env.BRANCH_NAME }} --resource-group patch-nextjs-app --hostname $HOSTNAME
+            # Add hostname binding - NOTE: This requires domain verification in Azure
+            az webapp config hostname add --webapp-name ${{ env.BRANCH_APP_NAME }} --resource-group patch-nextjs-app --hostname $HOSTNAME
           fi
 
       - name: Log out from Azure

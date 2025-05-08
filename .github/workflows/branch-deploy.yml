@@ -74,7 +74,7 @@ jobs:
       # Set up custom hostname for the branch app service
       - name: Configure custom hostname
         run: |
-          HOSTNAME="${{ env.BRANCH_NAME }}.staging.mydomain.com"
+          HOSTNAME="${{ env.BRANCH_NAME }}.staging.patch.robruizr.dev"
 
           # Check if hostname binding exists
           BINDING=$(az webapp config hostname list --webapp-name ${{ env.BRANCH_APP_NAME }} --resource-group patch-nextjs-app --query "[?name=='$HOSTNAME'].name" -o tsv)

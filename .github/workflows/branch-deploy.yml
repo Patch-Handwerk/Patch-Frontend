@@ -34,21 +34,27 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      # Configure Node.js version
+      - name: Configure Node.js version
+        run: |
+          az webapp config appsettings set --name patch-main-app --resource-group patch-nextjs-app --settings WEBSITE_NODE_DEFAULT_VERSION=~22
+
       # Create a new slot if it doesn't exist
       - name: Create deployment slot if needed
         run: |
           az webapp deployment slot create \
-            --name patch-nextjs-app \
+            --name patch-main-app \
             --resource-group patch-nextjs-app \
             --slot ${{ env.BRANCH_NAME }} \
-            --configuration-source patch-nextjs-app
+            --configuration-source patch-main-app
         continue-on-error: true
 
       # Deploy to the branch-specific slot
       - name: Deploy to slot
         uses: azure/webapps-deploy@v2
         with:
-          app-name: 'patch-nextjs-app'
+          app-name: 'patch-main-app'
+          resource-group-name: 'patch-nextjs-app'
           slot-name: ${{ env.BRANCH_NAME }}
           package: .
           startup-command: 'npm start'
@@ -59,11 +65,11 @@ jobs:
           HOSTNAME="${{ env.BRANCH_NAME }}.staging.mydomain.com"
 
           # Check if hostname binding exists
-          BINDING=$(az webapp config hostname list --webapp-name patch-nextjs-app --slot ${{ env.BRANCH_NAME }} --resource-group patch-nextjs-app --query "[?name=='$HOSTNAME'].name" -o tsv)
+          BINDING=$(az webapp config hostname list --webapp-name patch-main-app --slot ${{ env.BRANCH_NAME }} --resource-group patch-nextjs-app --query "[?name=='$HOSTNAME'].name" -o tsv)
 
           if [ -z "$BINDING" ]; then
             # Add hostname binding
-            az webapp config hostname add --webapp-name patch-nextjs-app --slot ${{ env.BRANCH_NAME }} --resource-group patch-nextjs-app --hostname $HOSTNAME
+            az webapp config hostname add --webapp-name patch-main-app --slot ${{ env.BRANCH_NAME }} --resource-group patch-nextjs-app --hostname $HOSTNAME
           fi
 
       - name: Log out from Azure

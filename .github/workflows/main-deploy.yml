@@ -33,10 +33,16 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      # Configure Node.js version on App Service
+      - name: Configure Node.js version
+        run: |
+          az webapp config appsettings set --name patch-main-app --resource-group patch-nextjs-app --settings WEBSITE_NODE_DEFAULT_VERSION=~22
+
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
         with:
-          app-name: 'patch-nextjs-app'
+          app-name: 'patch-main-app' # Updated to match your actual App Service name
+          resource-group-name: 'patch-nextjs-app' # Updated to match your resource group name
           package: .
           startup-command: 'npm start'
 

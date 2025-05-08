@@ -34,10 +34,16 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      # Configure Node.js version on App Service
+      - name: Configure Node.js version
+        run: |
+          az webapp config appsettings set --name patch-storybook-app --resource-group patch-storybook-app_group --settings WEBSITE_NODE_DEFAULT_VERSION=~22
+
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
         with:
-          app-name: 'patch-storybook-app'
+          app-name: 'patch-storybook-app' # Updated to match your actual Storybook App Service name
+          resource-group-name: 'patch-storybook-app_group' # Updated to match your resource group name
           package: ./storybook-static
           startup-command: 'npx http-server . -p 8080'
 

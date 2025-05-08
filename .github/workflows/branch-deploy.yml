@@ -53,7 +53,7 @@ jobs:
             az webapp create \
               --name $BRANCH_APP_NAME \
               --resource-group patch-nextjs-app \
-              --plan patch-app-service-plan \
+              --plan patch-nextjs-app \
               --runtime "NODE:22-lts"
           else
             echo "App Service $BRANCH_APP_NAME already exists."

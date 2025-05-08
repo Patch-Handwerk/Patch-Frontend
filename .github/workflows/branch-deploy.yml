@@ -42,12 +42,28 @@ jobs:
       # Create a new slot if it doesn't exist
       - name: Create deployment slot if needed
         run: |
-          az webapp deployment slot create \
-            --name patch-main-app \
-            --resource-group patch-nextjs-app \
-            --slot ${{ env.BRANCH_NAME }} \
-            --configuration-source patch-main-app
-        continue-on-error: true
+          # Check if slot exists
+          SLOT_EXISTS=$(az webapp deployment slot list --name patch-main-app --resource-group patch-nextjs-app --query "[?name=='${{ env.BRANCH_NAME }}']" -o tsv)
+
+          if [ -z "$SLOT_EXISTS" ]; then
+            echo "Creating new deployment slot ${{ env.BRANCH_NAME }}..."
+            az webapp deployment slot create \
+              --name patch-main-app \
+              --resource-group patch-nextjs-app \
+              --slot ${{ env.BRANCH_NAME }} \
+              --configuration-source patch-main-app
+            
+            # Configure Node.js version for the new slot
+            az webapp config appsettings set \
+              --name patch-main-app \
+              --resource-group patch-nextjs-app \
+              --slot ${{ env.BRANCH_NAME }} \
+              --settings WEBSITE_NODE_DEFAULT_VERSION=~22
+            
+            echo "Deployment slot created and configured."
+          else
+            echo "Deployment slot ${{ env.BRANCH_NAME }} already exists."
+          fi
 
       # Deploy to the branch-specific slot
       - name: Deploy to slot

@@ -1,4 +1,4 @@
-import { InputAdornment, OutlinedInput, TextField } from '@mui/material';
+import { InputAdornment, TextField } from '@mui/material';
 import { SearchIcon } from 'lucide-react';
 import * as React from 'react';
 

@@ -39,7 +39,7 @@ jobs:
         run: |
           az webapp deployment slot create \
             --name patch-nextjs-app \
-            --resource-group nextjs-app-rg \
+            --resource-group patch-nextjs-app \
             --slot ${{ env.BRANCH_NAME }} \
             --configuration-source patch-nextjs-app
         continue-on-error: true
@@ -59,11 +59,11 @@ jobs:
           HOSTNAME="${{ env.BRANCH_NAME }}.staging.mydomain.com"
 
           # Check if hostname binding exists
-          BINDING=$(az webapp config hostname list --webapp-name patch-nextjs-app --slot ${{ env.BRANCH_NAME }} --resource-group nextjs-app-rg --query "[?name=='$HOSTNAME'].name" -o tsv)
+          BINDING=$(az webapp config hostname list --webapp-name patch-nextjs-app --slot ${{ env.BRANCH_NAME }} --resource-group patch-nextjs-app --query "[?name=='$HOSTNAME'].name" -o tsv)
 
           if [ -z "$BINDING" ]; then
             # Add hostname binding
-            az webapp config hostname add --webapp-name patch-nextjs-app --slot ${{ env.BRANCH_NAME }} --resource-group nextjs-app-rg --hostname $HOSTNAME
+            az webapp config hostname add --webapp-name patch-nextjs-app --slot ${{ env.BRANCH_NAME }} --resource-group patch-nextjs-app --hostname $HOSTNAME
           fi
 
       - name: Log out from Azure

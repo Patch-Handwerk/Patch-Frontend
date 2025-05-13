@@ -34,59 +34,54 @@ jobs:
         run: |
           az upgrade --yes
 
-      # Configure Node.js version on App Service
-      - name: Configure Node.js version
+      # Create or update dev App Service (not a slot)
+      - name: Create dev App Service if needed
         run: |
-          az webapp config appsettings set --name patch-main-app --resource-group patch-nextjs-app --settings WEBSITE_NODE_DEFAULT_VERSION=~22
+          DEV_APP_NAME="patch-dev-app"
 
-      # Create dev deployment slot if it doesn't exist
-      - name: Create dev deployment slot if needed
-        run: |
-          # Check if the dev slot exists
-          DEV_SLOT_EXISTS=$(az webapp deployment slot list --name patch-main-app --resource-group patch-nextjs-app --query "[?name=='dev']" -o tsv)
+          # Check if the dev app exists
+          DEV_APP_EXISTS=$(az webapp list --query "[?name=='$DEV_APP_NAME']" -o tsv)
 
-          if [ -z "$DEV_SLOT_EXISTS" ]; then
-            echo "Creating new dev deployment slot..."
-            az webapp deployment slot create \
-              --name patch-main-app \
+          if [ -z "$DEV_APP_EXISTS" ]; then
+            echo "Creating new dev App Service..."
+            az webapp create \
+              --name $DEV_APP_NAME \
               --resource-group patch-nextjs-app \
-              --slot dev \
-              --configuration-source patch-main-app
+              --plan patch-app-service-plan \
+              --runtime "NODE:22-lts"
             
-            # Configure Node.js version for the new slot
-            az webapp config appsettings set \
-              --name patch-main-app \
-              --resource-group patch-nextjs-app \
-              --slot dev \
-              --settings WEBSITE_NODE_DEFAULT_VERSION=~22
-            
-            echo "Dev deployment slot created and configured."
+            echo "Dev App Service created."
           else
-            echo "Dev deployment slot already exists."
+            echo "Dev App Service already exists."
           fi
 
-      # Deploy to the dev slot
-      - name: Deploy to dev slot
+          # Configure Node.js version
+          az webapp config appsettings set \
+            --name $DEV_APP_NAME \
+            --resource-group patch-nextjs-app \
+            --settings WEBSITE_NODE_DEFAULT_VERSION=~22
+
+      # Deploy to the dev App Service
+      - name: Deploy to dev App Service
         uses: azure/webapps-deploy@v2
         with:
-          app-name: 'patch-main-app'
+          app-name: 'patch-dev-app'
           resource-group-name: 'patch-nextjs-app'
-          slot-name: 'dev'
           package: .
           startup-command: 'npm start'
 
-      # Set up custom hostname for the dev slot
+      # Set up custom hostname for the dev app
       - name: Configure custom hostname
         run: |
           HOSTNAME="dev.staging.robruizr.dev"
 
           # Check if hostname binding exists
-          BINDING=$(az webapp config hostname list --webapp-name patch-main-app --slot dev --resource-group patch-nextjs-app --query "[?name=='$HOSTNAME'].name" -o tsv)
+          BINDING=$(az webapp config hostname list --webapp-name patch-dev-app --resource-group patch-nextjs-app --query "[?name=='$HOSTNAME'].name" -o tsv)
 
           if [ -z "$BINDING" ]; then
             # Add hostname binding
             echo "Attempting to add custom domain binding. This may fail if DNS is not configured yet."
-            az webapp config hostname add --webapp-name patch-main-app --slot dev --resource-group patch-nextjs-app --hostname $HOSTNAME || echo "Custom domain binding failed. Please configure DNS records first."
+            az webapp config hostname add --webapp-name patch-dev-app --resource-group patch-nextjs-app --hostname $HOSTNAME || echo "Custom domain binding failed. Please configure DNS records first."
           fi
         continue-on-error: true # Allow workflow to continue even if this step fails
 

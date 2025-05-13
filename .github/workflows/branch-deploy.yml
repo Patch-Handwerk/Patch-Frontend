@@ -3,20 +3,18 @@ name: Deploy Branch Environments
 on:
   push:
     branches:
-      - dev
       - 'feature/**'
       - 'bugfix/**'
       - 'hotfix/**'
     branches-ignore:
       - main
       - master
+      - dev
 
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
     name: Build and Deploy Branch
-    # Add a conditional to skip this job for branches without deployment slots
-    if: ${{ github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/heads/feature/') || startsWith(github.ref, 'refs/heads/bugfix/') || startsWith(github.ref, 'refs/heads/hotfix/') }}
     steps:
       - uses: actions/checkout@v3
 
@@ -46,61 +44,69 @@ jobs:
         run: |
           az upgrade --yes
 
-      # Configure Node.js version
-      - name: Configure Node.js version
+      # Generate a safe app name
+      - name: Generate App Service name
         run: |
-          az webapp config appsettings set --name patch-main-app --resource-group patch-nextjs-app --settings WEBSITE_NODE_DEFAULT_VERSION=~22
+          # Create a safe app name (must be globally unique)
+          SAFE_BRANCH=$(echo ${{ env.BRANCH_NAME }} | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/^-//;s/-$//' | cut -c1-32)
+          BRANCH_APP_NAME="patch-$SAFE_BRANCH-app"
+          echo "BRANCH_APP_NAME=$BRANCH_APP_NAME" >> $GITHUB_ENV
 
-      # Create a new slot if it doesn't exist
-      - name: Create deployment slot if needed
+      # Create App Service for this branch if it doesn't exist
+      - name: Create branch App Service if needed
         run: |
-          # Check if slot exists
-          SLOT_EXISTS=$(az webapp deployment slot list --name patch-main-app --resource-group patch-nextjs-app --query "[?name=='${{ env.BRANCH_NAME }}']" -o tsv)
+          # Check if the app exists
+          APP_EXISTS=$(az webapp list --query "[?name=='${{ env.BRANCH_APP_NAME }}']" -o tsv)
 
-          if [ -z "$SLOT_EXISTS" ]; then
-            echo "Creating new deployment slot ${{ env.BRANCH_NAME }}..."
-            az webapp deployment slot create \
-              --name patch-main-app \
+          if [ -z "$APP_EXISTS" ]; then
+            echo "Creating new App Service ${{ env.BRANCH_APP_NAME }}..."
+            az webapp create \
+              --name ${{ env.BRANCH_APP_NAME }} \
               --resource-group patch-nextjs-app \
-              --slot ${{ env.BRANCH_NAME }} \
-              --configuration-source patch-main-app
+              --plan patch-app-service-plan \
+              --runtime "NODE:22-lts"
             
-            # Configure Node.js version for the new slot
-            az webapp config appsettings set \
-              --name patch-main-app \
-              --resource-group patch-nextjs-app \
-              --slot ${{ env.BRANCH_NAME }} \
-              --settings WEBSITE_NODE_DEFAULT_VERSION=~22
-            
-            echo "Deployment slot created and configured."
+            echo "Branch App Service created."
           else
-            echo "Deployment slot ${{ env.BRANCH_NAME }} already exists."
+            echo "Branch App Service already exists."
           fi
 
-      # Deploy to the branch-specific slot
-      - name: Deploy to slot
+          # Configure Node.js version
+          az webapp config appsettings set \
+            --name ${{ env.BRANCH_APP_NAME }} \
+            --resource-group patch-nextjs-app \
+            --settings WEBSITE_NODE_DEFAULT_VERSION=~22
+
+      # Deploy to the branch App Service
+      - name: Deploy to branch App Service
         uses: azure/webapps-deploy@v2
         with:
-          app-name: 'patch-main-app'
+          app-name: ${{ env.BRANCH_APP_NAME }}
           resource-group-name: 'patch-nextjs-app'
-          slot-name: ${{ env.BRANCH_NAME }}
           package: .
           startup-command: 'npm start'
 
-      # Set up custom hostname for the slot
+      # Set up custom hostname for the branch app
       - name: Configure custom hostname
         run: |
           HOSTNAME="${{ env.BRANCH_NAME }}.staging.robruizr.dev"
 
           # Check if hostname binding exists
-          BINDING=$(az webapp config hostname list --webapp-name patch-main-app --slot ${{ env.BRANCH_NAME }} --resource-group patch-nextjs-app --query "[?name=='$HOSTNAME'].name" -o tsv)
+          BINDING=$(az webapp config hostname list --webapp-name ${{ env.BRANCH_APP_NAME }} --resource-group patch-nextjs-app --query "[?name=='$HOSTNAME'].name" -o tsv)
 
           if [ -z "$BINDING" ]; then
             # Add hostname binding
             echo "Attempting to add custom domain binding. This may fail if DNS is not configured yet."
-            az webapp config hostname add --webapp-name patch-main-app --slot ${{ env.BRANCH_NAME }} --resource-group patch-nextjs-app --hostname $HOSTNAME || echo "Custom domain binding failed. Please configure DNS records first."
+            az webapp config hostname add --webapp-name ${{ env.BRANCH_APP_NAME }} --resource-group patch-nextjs-app --hostname $HOSTNAME || echo "Custom domain binding failed. Please configure DNS records first."
           fi
         continue-on-error: true # Allow workflow to continue even if this step fails
+
+      # Output the app URL
+      - name: Display deployment URLs
+        run: |
+          echo "Branch deployed to:"
+          echo "  Azure URL: https://${{ env.BRANCH_APP_NAME }}.azurewebsites.net"
+          echo "  Custom URL: https://${{ env.BRANCH_NAME }}.staging.robruizr.dev (once DNS is configured)"
 
       - name: Log out from Azure
         run: az logout

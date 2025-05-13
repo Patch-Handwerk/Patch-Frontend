@@ -46,6 +46,19 @@ jobs:
           package: .
           startup-command: 'npm start'
 
+      # Set up custom hostname for main app
+      - name: Configure custom hostname
+        run: |
+          HOSTNAME="robruizr.dev"
+
+          # Check if hostname binding exists
+          BINDING=$(az webapp config hostname list --webapp-name patch-main-app --resource-group patch-nextjs-app --query "[?name=='$HOSTNAME'].name" -o tsv)
+
+          if [ -z "$BINDING" ]; then
+            # Add hostname binding
+            echo "Attempting to add custom domain binding. This may fail if DNS is not configured yet."
+            az webapp config hostname add --webapp-name patch-main-app --resource-group patch-nextjs-app --hostname $HOSTNAME || echo "Custom domain binding failed. Please configure DNS records first."
+          fi
       - name: Log out from Azure
         run: az logout
         if: always()

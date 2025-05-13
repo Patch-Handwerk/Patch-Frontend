@@ -47,6 +47,19 @@ jobs:
           package: ./storybook-static
           startup-command: 'npx http-server . -p 8080'
 
+      # Set up custom hostname for Storybook
+      - name: Configure custom hostname
+        run: |
+          HOSTNAME="storybook.robruizr.dev"
+
+          # Check if hostname binding exists
+          BINDING=$(az webapp config hostname list --webapp-name patch-storybook-app --resource-group patch-storybook-app_group --query "[?name=='$HOSTNAME'].name" -o tsv)
+
+          if [ -z "$BINDING" ]; then
+            # Add hostname binding
+            echo "Attempting to add custom domain binding. This may fail if DNS is not configured yet."
+            az webapp config hostname add --webapp-name patch-storybook-app --resource-group patch-storybook-app_group --hostname $HOSTNAME || echo "Custom domain binding failed. Please configure DNS records first."
+          fi
       - name: Log out from Azure
         run: az logout
         if: always()

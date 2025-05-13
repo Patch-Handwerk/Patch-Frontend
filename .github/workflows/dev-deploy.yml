@@ -1,28 +1,16 @@
-name: Deploy Branch Environments
+name: Deploy Dev Environment
 
 on:
   push:
     branches:
       - dev
-      - 'feature/**'
-      - 'bugfix/**'
-      - 'hotfix/**'
-    branches-ignore:
-      - main
-      - master
 
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
-    name: Build and Deploy Branch
-    # Add a conditional to skip this job for branches without deployment slots
-    if: ${{ github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/heads/feature/') || startsWith(github.ref, 'refs/heads/bugfix/') || startsWith(github.ref, 'refs/heads/hotfix/') }}
+    name: Build and Deploy Dev Environment
     steps:
       - uses: actions/checkout@v3
-
-      - name: Extract branch name
-        shell: bash
-        run: echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> $GITHUB_ENV
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -46,59 +34,59 @@ jobs:
         run: |
           az upgrade --yes
 
-      # Configure Node.js version
+      # Configure Node.js version on App Service
       - name: Configure Node.js version
         run: |
           az webapp config appsettings set --name patch-main-app --resource-group patch-nextjs-app --settings WEBSITE_NODE_DEFAULT_VERSION=~22
 
-      # Create a new slot if it doesn't exist
-      - name: Create deployment slot if needed
+      # Create dev deployment slot if it doesn't exist
+      - name: Create dev deployment slot if needed
         run: |
-          # Check if slot exists
-          SLOT_EXISTS=$(az webapp deployment slot list --name patch-main-app --resource-group patch-nextjs-app --query "[?name=='${{ env.BRANCH_NAME }}']" -o tsv)
+          # Check if the dev slot exists
+          DEV_SLOT_EXISTS=$(az webapp deployment slot list --name patch-main-app --resource-group patch-nextjs-app --query "[?name=='dev']" -o tsv)
 
-          if [ -z "$SLOT_EXISTS" ]; then
-            echo "Creating new deployment slot ${{ env.BRANCH_NAME }}..."
+          if [ -z "$DEV_SLOT_EXISTS" ]; then
+            echo "Creating new dev deployment slot..."
             az webapp deployment slot create \
               --name patch-main-app \
               --resource-group patch-nextjs-app \
-              --slot ${{ env.BRANCH_NAME }} \
+              --slot dev \
               --configuration-source patch-main-app
             
             # Configure Node.js version for the new slot
             az webapp config appsettings set \
               --name patch-main-app \
               --resource-group patch-nextjs-app \
-              --slot ${{ env.BRANCH_NAME }} \
+              --slot dev \
               --settings WEBSITE_NODE_DEFAULT_VERSION=~22
             
-            echo "Deployment slot created and configured."
+            echo "Dev deployment slot created and configured."
           else
-            echo "Deployment slot ${{ env.BRANCH_NAME }} already exists."
+            echo "Dev deployment slot already exists."
           fi
 
-      # Deploy to the branch-specific slot
-      - name: Deploy to slot
+      # Deploy to the dev slot
+      - name: Deploy to dev slot
         uses: azure/webapps-deploy@v2
         with:
           app-name: 'patch-main-app'
           resource-group-name: 'patch-nextjs-app'
-          slot-name: ${{ env.BRANCH_NAME }}
+          slot-name: 'dev'
           package: .
           startup-command: 'npm start'
 
-      # Set up custom hostname for the slot
+      # Set up custom hostname for the dev slot
       - name: Configure custom hostname
         run: |
-          HOSTNAME="${{ env.BRANCH_NAME }}.staging.robruizr.dev"
+          HOSTNAME="dev.staging.robruizr.dev"
 
           # Check if hostname binding exists
-          BINDING=$(az webapp config hostname list --webapp-name patch-main-app --slot ${{ env.BRANCH_NAME }} --resource-group patch-nextjs-app --query "[?name=='$HOSTNAME'].name" -o tsv)
+          BINDING=$(az webapp config hostname list --webapp-name patch-main-app --slot dev --resource-group patch-nextjs-app --query "[?name=='$HOSTNAME'].name" -o tsv)
 
           if [ -z "$BINDING" ]; then
             # Add hostname binding
             echo "Attempting to add custom domain binding. This may fail if DNS is not configured yet."
-            az webapp config hostname add --webapp-name patch-main-app --slot ${{ env.BRANCH_NAME }} --resource-group patch-nextjs-app --hostname $HOSTNAME || echo "Custom domain binding failed. Please configure DNS records first."
+            az webapp config hostname add --webapp-name patch-main-app --slot dev --resource-group patch-nextjs-app --hostname $HOSTNAME || echo "Custom domain binding failed. Please configure DNS records first."
           fi
         continue-on-error: true # Allow workflow to continue even if this step fails
 

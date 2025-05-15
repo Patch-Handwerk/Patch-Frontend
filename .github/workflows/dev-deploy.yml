@@ -62,7 +62,6 @@ jobs:
       - name: Show current files
         run: |
           ls -la
-          ls -la ./.next/standalone
 
       - name: Login to Azure
         uses: azure/login@v2

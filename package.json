@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
-    "start": "PORT=8080 node ./standalone/server.js",
+    "start": "PORT=8080 node ./server.js",
     "lint": "next lint",
     "prepare": "husky",
     "test": "jest",
